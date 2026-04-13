@@ -1,4 +1,3 @@
-
 #include <Wire.h>
 #include <Adafruit_BMP085.h>
 #include <ESP8266WiFi.h>
@@ -31,15 +30,17 @@ const int      station         = STATION_ID;
 const uint16_t udpPort         = UDP_PORT;
 const int      displayInterval = DISPLAY_INTERVAL;
 
+#define WIFI_CONNECT_TIMEOUT_MS 15000
+
 Adafruit_BMP085 pressure;
 WiFiUDP Udp;
 
-int           statusBMP;
 unsigned long t_times;
 int           timestop = 0;
 
-// Connect to the strongest available WiFi from the configured list.
-// Blocks until a connection is established.
+// Scan for the strongest known WiFi network and connect to it.
+// Retries indefinitely — scans again if no known network is visible,
+// or if connection is not established within WIFI_CONNECT_TIMEOUT_MS.
 void connectWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
@@ -67,14 +68,28 @@ void connectWifi() {
       delay(10);
     }
 
-    if (bestSsid != nullptr) {
-      Serial.print("Connecting to ");
-      Serial.println(bestSsid);
-      WiFi.begin(bestSsid, bestPass);
-      while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
+    if (bestSsid == nullptr) {
+      Serial.println("No known network found, retrying scan...");
+      delay(3000);
+      continue;
+    }
+
+    Serial.print("Connecting to ");
+    Serial.println(bestSsid);
+    WiFi.begin(bestSsid, bestPass);
+
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED) {
+      if (millis() - start > WIFI_CONNECT_TIMEOUT_MS) {
+        Serial.println("\nConnection timed out, rescanning...");
+        WiFi.disconnect();
+        break;
       }
+      delay(500);
+      Serial.print(".");
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
       Serial.println();
       Serial.print("IP: ");
       Serial.println(WiFi.localIP());
@@ -89,13 +104,25 @@ void setup() {
 
   connectWifi();
 
-  statusBMP = pressure.begin();
-  if (!statusBMP) {
-    while (1) { Serial.println("Wrong BMP180 Connection"); }
+  if (!pressure.begin()) {
+    while (1) { Serial.println("BMP180 not found — check wiring"); }
   }
 }
 
 void loop() {
+  // Reconnect gracefully if WiFi dropped
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi lost, reconnecting...");
+    connectWifi();
+  }
+
+  // Hard reset if signal is too weak or connection dropped mid-loop
+  if (WiFi.RSSI() < -90 || WiFi.status() != WL_CONNECTED) {
+    Serial.println("Signal too weak or connection lost, resetting...");
+    delay(100);
+    ESP.reset();
+  }
+
   t_times = millis() / 1000;
 
   if (t_times % displayInterval == 0) {
@@ -103,15 +130,12 @@ void loop() {
       double Temp  = pressure.readTemperature();
       double Press = pressure.readPressure();
 
-      char tempChar[100];
-      sprintf(tempChar, "%i %.2f %.1f\n", station, Temp, Press);
-      Serial.print(tempChar);
-
-      // Reset if WiFi signal is too weak or connection dropped
-      if (WiFi.RSSI() < -90 || WiFi.status() != WL_CONNECTED) { ESP.reset(); }
+      char buf[100];
+      sprintf(buf, "%i %.2f %.1f\n", station, Temp, Press);
+      Serial.print(buf);
 
       Udp.beginPacket(UDP_IP_STR, udpPort);
-      Udp.write(tempChar);
+      Udp.write(buf);
       Udp.endPacket();
 
       timestop = 1;

@@ -129,6 +129,13 @@ Monitor Serial Output
 arduino-cli monitor -p /dev/ttyUSB0 -c baudrate=9600
 ```
 
+Manual
+------
+
+[Manual_ArduinoIDE_Legacy.pdf](Manual_ArduinoIDE_Legacy.pdf) covers the
+original Arduino IDE-based setup procedure — useful if you want to modify
+and upload the sketch manually without the CLI workflow described here.
+
 Reference
 ---------
 

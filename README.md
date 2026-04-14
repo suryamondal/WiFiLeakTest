@@ -129,6 +129,15 @@ Monitor Serial Output
 arduino-cli monitor -p /dev/ttyUSB0 -c baudrate=9600
 ```
 
+Reference
+---------
+
+The theory and methodology behind this wireless leak test setup are
+described in the following publications:
+
+- [Preprint (arXiv:1812.00277)](https://arxiv.org/abs/1812.00277)
+- [Published — JINST 14 P04009 (2019)](https://doi.org/10.1088/1748-0221/14/04/P04009)
+
 ----------------------------------------------------------------------
 
 UDP Packet Format
